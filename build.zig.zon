@@ -1,6 +1,7 @@
 .{
     .name = "zstbi",
     .version = "0.10.0",
+    .minimum_zig_version = "0.13.0-dev.351+64ef45eb0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
