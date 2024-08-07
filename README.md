@@ -1,4 +1,6 @@
-# zstbi v0.10.0 - stb image bindings
+# zstbi
+
+Zig bindings and build package for stb_image, stb_image_resize and stb_image_write from [Sean Barrett's stb single-file C libraries](https://github.com/nothings/stb)
 
 ## Features
 
@@ -11,12 +13,7 @@
 
 ## Getting started
 
-Copy `zstbi` to a subdirectory of your project and add the following to your `build.zig.zon` .dependencies:
-```zig
-    .zstbi = .{ .path = "libs/zstbi" },
-```
-
-Then in your `build.zig` add:
+Add `zstbi` to your `build.zig.zon` .dependencies and in your `build.zig` add:
 ```zig
 pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{ ... });
