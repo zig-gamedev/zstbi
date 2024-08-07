@@ -1,4 +1,4 @@
-# zstbi
+# [zstbi](https://github.com/zig-gamedev/zstbi)
 
 Zig bindings and build package for stb_image, stb_image_resize and stb_image_write from [Sean Barrett's stb single-file C libraries](https://github.com/nothings/stb)
 
