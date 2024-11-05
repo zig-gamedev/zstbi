@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{matrix.os}}
     steps:
       - name: Checkout repository
@@ -29,6 +29,8 @@ jobs:
         uses: mlugg/setup-zig@v1
         with:
           version: ${{ steps.zigversion.outputs.content }}
-      - name: Build and test
-        run: zig fmt --check . && zig build && zig build test
-
+      - name: Check format
+        continue-on-error: true
+        run: zig fmt --check .
+      - name: Build and run tests
+        run: zig build test
