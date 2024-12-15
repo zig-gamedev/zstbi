@@ -34,7 +34,14 @@ pub fn build(b: *std.Build) void {
             },
         });
     }
-    zstbi_lib.linkLibC();
+
+    if (target.result.os.tag == .emscripten) {
+        zstbi_lib.addIncludePath(.{
+            .cwd_relative = b.pathJoin(&.{ b.sysroot.?, "/include" }),
+        });
+    } else {
+        zstbi_lib.linkLibC();
+    }
     b.installArtifact(zstbi_lib);
 
     const test_step = b.step("test", "Run zstbi tests");
