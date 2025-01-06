@@ -13,7 +13,14 @@ Zig bindings and build package for stb_image, stb_image_resize and stb_image_wri
 
 ## Getting started
 
-Add `zstbi` to your `build.zig.zon` .dependencies and in your `build.zig` add:
+Add `zstbi` to your `build.zig.zon` .dependencies with:
+
+```
+zig fetch --save git+https://github.com/zig-gamedev/zstbi
+```
+
+and in your `build.zig` add:
+
 ```zig
 pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{ ... });
