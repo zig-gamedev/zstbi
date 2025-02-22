@@ -4,19 +4,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
-    _ = b.addModule("root", .{
+    const zstbi = b.addModule("root", .{
         .root_source_file = b.path("src/zstbi.zig"),
     });
 
-    const zstbi_lib = b.addStaticLibrary(.{
-        .name = "zstbi",
-        .target = target,
-        .optimize = optimize,
-    });
-    zstbi_lib.addIncludePath(b.path("libs/stbi"));
+    zstbi.addIncludePath(b.path("libs/stbi"));
     if (optimize == .Debug) {
         // TODO: Workaround for Zig bug.
-        zstbi_lib.addCSourceFile(.{
+        zstbi.addCSourceFile(.{
             .file = b.path("src/zstbi.c"),
             .flags = &.{
                 "-std=c99",
@@ -26,7 +21,7 @@ pub fn build(b: *std.Build) void {
             },
         });
     } else {
-        zstbi_lib.addCSourceFile(.{
+        zstbi.addCSourceFile(.{
             .file = b.path("src/zstbi.c"),
             .flags = &.{
                 "-std=c99",
@@ -36,13 +31,13 @@ pub fn build(b: *std.Build) void {
     }
 
     if (target.result.os.tag == .emscripten) {
-        zstbi_lib.addIncludePath(.{
+        zstbi.addIncludePath(.{
             .cwd_relative = b.pathJoin(&.{ b.sysroot.?, "/include" }),
         });
     } else {
-        zstbi_lib.linkLibC();
+        zstbi.link_libc = true;
     }
-    b.installArtifact(zstbi_lib);
+    b.installArtifact(zstbi);
 
     const test_step = b.step("test", "Run zstbi tests");
 
@@ -52,7 +47,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    tests.linkLibrary(zstbi_lib);
+    tests.root_module.addImport("zstbi", zstbi);
     b.installArtifact(tests);
 
     test_step.dependOn(&b.addRunArtifact(tests).step);
