@@ -37,7 +37,6 @@ pub fn build(b: *std.Build) void {
     } else {
         zstbi.link_libc = true;
     }
-    b.installArtifact(zstbi);
 
     const test_step = b.step("test", "Run zstbi tests");
 
