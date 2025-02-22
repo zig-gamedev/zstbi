@@ -27,7 +27,6 @@ pub fn build(b: *std.Build) void {
 
     const zstbi = b.dependency("zstbi", .{});
     exe.root_module.addImport("zstbi", zstbi.module("root"));
-    exe.linkLibrary(zstbi.artifact("zstbi"));
 }
 ```
 Now in your code you may import and use `zstbi`.
