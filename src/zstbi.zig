@@ -380,7 +380,7 @@ pub fn setFlipVerticallyOnWrite(should_flip: bool) void {
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, usize) = null;
 var mem_mutex: std.Thread.Mutex = .{};
-const mem_alignment = 16;
+const mem_alignment = std.mem.Alignment.@"16";
 
 extern var zstbiMallocPtr: ?*const fn (size: usize) callconv(.C) ?*anyopaque;
 extern var zstbiwMallocPtr: ?*const fn (size: usize) callconv(.C) ?*anyopaque;
@@ -409,9 +409,9 @@ fn zstbiRealloc(ptr: ?*anyopaque, size: usize) callconv(.C) ?*anyopaque {
 
     const old_size = if (ptr != null) mem_allocations.?.get(@intFromPtr(ptr.?)).? else 0;
     const old_mem = if (old_size > 0)
-        @as([*]align(mem_alignment) u8, @ptrCast(@alignCast(ptr)))[0..old_size]
+        @as([*]align(mem_alignment.toByteUnits()) u8, @ptrCast(@alignCast(ptr)))[0..old_size]
     else
-        @as([*]align(mem_alignment) u8, undefined)[0..0];
+        @as([*]align(mem_alignment.toByteUnits()) u8, undefined)[0..0];
 
     const new_mem = mem_allocator.?.realloc(old_mem, size) catch @panic("zstbi: out of memory");
 
@@ -434,7 +434,7 @@ fn zstbiFree(maybe_ptr: ?*anyopaque) callconv(.C) void {
         defer mem_mutex.unlock();
 
         const size = mem_allocations.?.fetchRemove(@intFromPtr(ptr)).?.value;
-        const mem = @as([*]align(mem_alignment) u8, @ptrCast(@alignCast(ptr)))[0..size];
+        const mem = @as([*]align(mem_alignment.toByteUnits()) u8, @ptrCast(@alignCast(ptr)))[0..size];
         mem_allocator.?.free(mem);
     }
 }
