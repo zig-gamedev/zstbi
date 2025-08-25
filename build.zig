@@ -5,6 +5,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
 
     const zstbi = b.addModule("root", .{
+        .target = target,
+        .optimize = optimize,
         .root_source_file = b.path("src/zstbi.zig"),
     });
 
@@ -42,9 +44,7 @@ pub fn build(b: *std.Build) void {
 
     const tests = b.addTest(.{
         .name = "zstbi-tests",
-        .root_source_file = b.path("src/zstbi.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = zstbi,
     });
     tests.root_module.addImport("zstbi", zstbi);
     b.installArtifact(tests);
