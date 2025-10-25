@@ -539,6 +539,15 @@ extern fn stbi_write_png(
     stride_in_bytes: c_int,
 ) c_int;
 
+pub extern fn stbi_write_bmp(
+    filename: [*:0]const u8,
+    w: c_int,
+    h: c_int,
+    comp: c_int,
+    data: [*]const u8,
+    stride_in_bytes: c_int,
+) c_int;
+
 extern fn stbi_write_png_to_func(
     func: *const fn (?*anyopaque, ?*anyopaque, c_int) callconv(.c) void,
     context: ?*anyopaque,
