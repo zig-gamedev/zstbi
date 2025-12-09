@@ -29,14 +29,7 @@ pub fn build(b: *std.Build) void {
             },
         });
     }
-
-    if (target.result.os.tag == .emscripten) {
-        zstbi.addIncludePath(.{
-            .cwd_relative = b.pathJoin(&.{ b.sysroot.?, "/include" }),
-        });
-    } else {
-        zstbi.link_libc = true;
-    }
+    zstbi.link_libc = true;
 
     const test_step = b.step("test", "Run zstbi tests");
 
