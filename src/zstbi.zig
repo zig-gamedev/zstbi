@@ -2,10 +2,11 @@ const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
 
-pub fn init(allocator: std.mem.Allocator) void {
+pub fn init(io: std.Io, allocator: std.mem.Allocator) void {
     assert(mem_allocator == null);
     mem_allocator = allocator;
     mem_allocations = std.AutoHashMap(usize, usize).init(allocator);
+    zstb_io = io;
 
     // stb image
     zstbiMallocPtr = zstbiMalloc;
@@ -377,17 +378,18 @@ pub fn setFlipVerticallyOnWrite(should_flip: bool) void {
     stbi_flip_vertically_on_write(if (should_flip) 1 else 0);
 }
 
+var zstb_io: std.Io = undefined;
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, usize) = null;
-var mem_mutex: std.Thread.Mutex = .{};
+var mem_mutex: std.Io.Mutex = .init;
 const mem_alignment = 16;
 
 extern var zstbiMallocPtr: ?*const fn (size: usize) callconv(.c) ?*anyopaque;
 extern var zstbiwMallocPtr: ?*const fn (size: usize) callconv(.c) ?*anyopaque;
 
 fn zstbiMalloc(size: usize) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    mem_mutex.lock(zstb_io) catch return null;
+    defer mem_mutex.unlock(zstb_io);
 
     const mem = mem_allocator.?.alignedAlloc(
         u8,
@@ -404,8 +406,8 @@ extern var zstbiReallocPtr: ?*const fn (ptr: ?*anyopaque, size: usize) callconv(
 extern var zstbiwReallocPtr: ?*const fn (ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque;
 
 fn zstbiRealloc(ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
-    mem_mutex.lock();
-    defer mem_mutex.unlock();
+    mem_mutex.lock(zstb_io) catch return null;
+    defer mem_mutex.unlock(zstb_io);
 
     const old_size = if (ptr != null) mem_allocations.?.get(@intFromPtr(ptr.?)).? else 0;
     const old_mem = if (old_size > 0)
@@ -430,8 +432,8 @@ extern var zstbiwFreePtr: ?*const fn (maybe_ptr: ?*anyopaque) callconv(.c) void;
 
 fn zstbiFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        mem_mutex.lock();
-        defer mem_mutex.unlock();
+        mem_mutex.lock(zstb_io) catch return;
+        defer mem_mutex.unlock(zstb_io);
 
         const size = mem_allocations.?.fetchRemove(@intFromPtr(ptr)).?.value;
         const mem = @as([*]align(mem_alignment) u8, @ptrCast(@alignCast(ptr)))[0..size];
@@ -560,7 +562,7 @@ extern fn stbi_write_jpg_to_func(
 ) c_int;
 
 test "zstbi basic" {
-    init(testing.allocator);
+    init(testing.io, testing.allocator);
     defer deinit();
 
     var im1 = try Image.createEmpty(8, 6, 4, .{});
@@ -572,7 +574,7 @@ test "zstbi basic" {
 }
 
 test "zstbi resize" {
-    init(testing.allocator);
+    init(testing.io, testing.allocator);
     defer deinit();
 
     var im1 = try Image.createEmpty(32, 32, 4, .{});
@@ -587,12 +589,13 @@ test "zstbi resize" {
 }
 
 test "zstbi write and load file" {
-    init(testing.allocator);
+    init(testing.io, testing.allocator);
     defer deinit();
 
-    const pth = try std.fs.selfExeDirPathAlloc(testing.allocator);
+    const pth = try std.process.executableDirPathAlloc(zstb_io, testing.allocator);
     defer testing.allocator.free(pth);
-    try std.posix.chdir(pth);
+
+    try std.process.setCurrentPath(testing.io, pth);
 
     var img = try Image.createEmpty(8, 6, 4, .{});
     defer img.deinit();
@@ -614,6 +617,6 @@ test "zstbi write and load file" {
     try testing.expect(img_jpg.height == img.height);
     try testing.expect(img_jpg.num_components == 3); // RGB JPEG
 
-    try std.fs.cwd().deleteFile("test_img.png");
-    try std.fs.cwd().deleteFile("test_img.jpg");
+    try std.Io.Dir.cwd().deleteFile(testing.io, "test_img.png");
+    try std.Io.Dir.cwd().deleteFile(testing.io, "test_img.jpg");
 }
