@@ -1,12 +1,16 @@
 const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
+const Threaded = std.Io.Threaded;
 
-pub fn init(io: std.Io, allocator: std.mem.Allocator) void {
-    assert(mem_allocator == null);
+pub fn init(allocator: std.mem.Allocator) !void {
+    if (mem_allocator != null) {
+        if (mem_allocations.?.count() != 0) return error.AllocatorStillInUse
+        else mem_allocations.?.deinit();
+    }
+
     mem_allocator = allocator;
     mem_allocations = std.AutoHashMap(usize, usize).init(allocator);
-    zstb_io = io;
 
     // stb image
     zstbiMallocPtr = zstbiMalloc;
@@ -21,9 +25,13 @@ pub fn init(io: std.Io, allocator: std.mem.Allocator) void {
     zstbiwFreePtr = zstbiFree;
 }
 
+pub fn isInitialized() bool {
+    return mem_allocator != null;
+}
+
 pub fn deinit() void {
-    assert(mem_allocator != null);
-    assert(mem_allocations.?.count() == 0);
+    if (mem_allocator == null) return std.log.warn("[Warning] Attempt to deinit uninitialized library.", .{});
+    if (mem_allocations.?.count() != 0) @panic("Memory address leaked!");
 
     setFlipVerticallyOnLoad(false);
     setFlipVerticallyOnWrite(false);
@@ -44,6 +52,7 @@ pub const ImageWriteFormat = union(enum) {
 
 pub const ImageWriteError = error{
     CouldNotWriteImage,
+    LibraryUninitialized,
 };
 
 pub const Image = struct {
@@ -55,20 +64,21 @@ pub const Image = struct {
     bytes_per_row: u32,
     is_hdr: bool,
 
-    pub fn info(pathname: [:0]const u8) struct {
-        is_supported: bool,
+    pub fn info(pathname: [:0]const u8) !struct {
         width: u32,
         height: u32,
         num_components: u32,
     } {
-        assert(mem_allocator != null);
+        if (mem_allocator == null) return error.LibraryUninitialized;
 
         var w: c_int = 0;
         var h: c_int = 0;
         var c: c_int = 0;
+
         const is_supported = stbi_info(pathname, &w, &h, &c);
+        if (!is_supported) return error.UnsupportedImage; // values of w,h,c aren't filled when this is false.
+
         return .{
-            .is_supported = if (is_supported == 1) true else false,
             .width = @as(u32, @intCast(w)),
             .height = @as(u32, @intCast(h)),
             .num_components = @as(u32, @intCast(c)),
@@ -76,7 +86,7 @@ pub const Image = struct {
     }
 
     pub fn loadFromFile(pathname: [:0]const u8, forced_num_components: u32) !Image {
-        assert(mem_allocator != null);
+        if (mem_allocator == null) return error.LibraryUninitialized;
 
         var width: u32 = 0;
         var height: u32 = 0;
@@ -155,7 +165,7 @@ pub const Image = struct {
     }
 
     pub fn loadFromMemory(data: []const u8, forced_num_components: u32) !Image {
-        assert(mem_allocator != null);
+        if (mem_allocator == null) return error.LibraryUninitialized;
 
         var width: u32 = 0;
         var height: u32 = 0;
@@ -231,7 +241,7 @@ pub const Image = struct {
         bytes_per_component: u32 = 0,
         bytes_per_row: u32 = 0,
     }) !Image {
-        assert(mem_allocator != null);
+        if (mem_allocator == null) return error.LibraryUninitialized;
 
         const bytes_per_component = if (args.bytes_per_component == 0) 1 else args.bytes_per_component;
         const bytes_per_row = if (args.bytes_per_row == 0)
@@ -255,8 +265,8 @@ pub const Image = struct {
         };
     }
 
-    pub fn resize(image: *const Image, new_width: u32, new_height: u32) Image {
-        assert(mem_allocator != null);
+    pub fn resize(image: *const Image, new_width: u32, new_height: u32) !Image {
+        if (mem_allocator == null) return error.LibraryUninitialized;
 
         // TODO: Add support for HDR images
         const new_bytes_per_row = new_width * image.num_components * image.bytes_per_component;
@@ -289,7 +299,7 @@ pub const Image = struct {
         filename: [:0]const u8,
         image_format: ImageWriteFormat,
     ) ImageWriteError!void {
-        assert(mem_allocator != null);
+        if (mem_allocator == null) return error.LibraryUninitialized;
 
         const w = @as(c_int, @intCast(image.width));
         const h = @as(c_int, @intCast(image.height));
@@ -317,7 +327,7 @@ pub const Image = struct {
         context: ?*anyopaque,
         image_format: ImageWriteFormat,
     ) ImageWriteError!void {
-        assert(mem_allocator != null);
+        if (mem_allocator == null) return error.LibraryUninitialized;
 
         const w = @as(c_int, @intCast(image.width));
         const h = @as(c_int, @intCast(image.height));
@@ -378,7 +388,6 @@ pub fn setFlipVerticallyOnWrite(should_flip: bool) void {
     stbi_flip_vertically_on_write(if (should_flip) 1 else 0);
 }
 
-var zstb_io: std.Io = undefined;
 var mem_allocator: ?std.mem.Allocator = null;
 var mem_allocations: ?std.AutoHashMap(usize, usize) = null;
 var mem_mutex: std.Io.Mutex = .init;
@@ -388,8 +397,8 @@ extern var zstbiMallocPtr: ?*const fn (size: usize) callconv(.c) ?*anyopaque;
 extern var zstbiwMallocPtr: ?*const fn (size: usize) callconv(.c) ?*anyopaque;
 
 fn zstbiMalloc(size: usize) callconv(.c) ?*anyopaque {
-    mem_mutex.lock(zstb_io) catch return null;
-    defer mem_mutex.unlock(zstb_io);
+    Threaded.mutexLock(&mem_mutex);
+    defer Threaded.mutexUnlock(&mem_mutex);
 
     const mem = mem_allocator.?.alignedAlloc(
         u8,
@@ -406,8 +415,8 @@ extern var zstbiReallocPtr: ?*const fn (ptr: ?*anyopaque, size: usize) callconv(
 extern var zstbiwReallocPtr: ?*const fn (ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque;
 
 fn zstbiRealloc(ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
-    mem_mutex.lock(zstb_io) catch return null;
-    defer mem_mutex.unlock(zstb_io);
+    Threaded.mutexLock(&mem_mutex);
+    defer Threaded.mutexUnlock(&mem_mutex);
 
     const old_size = if (ptr != null) mem_allocations.?.get(@intFromPtr(ptr.?)).? else 0;
     const old_mem = if (old_size > 0)
@@ -419,7 +428,7 @@ fn zstbiRealloc(ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
 
     if (ptr != null) {
         const removed = mem_allocations.?.remove(@intFromPtr(ptr.?));
-        std.debug.assert(removed);
+        assert(removed);
     }
 
     mem_allocations.?.put(@intFromPtr(new_mem.ptr), size) catch @panic("zstbi: out of memory");
@@ -432,8 +441,8 @@ extern var zstbiwFreePtr: ?*const fn (maybe_ptr: ?*anyopaque) callconv(.c) void;
 
 fn zstbiFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        mem_mutex.lock(zstb_io) catch return;
-        defer mem_mutex.unlock(zstb_io);
+        Threaded.mutexLock(&mem_mutex);
+        defer Threaded.mutexUnlock(&mem_mutex);
 
         const size = mem_allocations.?.fetchRemove(@intFromPtr(ptr)).?.value;
         const mem = @as([*]align(mem_alignment) u8, @ptrCast(@alignCast(ptr)))[0..size];
@@ -562,7 +571,7 @@ extern fn stbi_write_jpg_to_func(
 ) c_int;
 
 test "zstbi basic" {
-    init(testing.io, testing.allocator);
+    try init(testing.allocator);
     defer deinit();
 
     var im1 = try Image.createEmpty(8, 6, 4, .{});
@@ -574,13 +583,13 @@ test "zstbi basic" {
 }
 
 test "zstbi resize" {
-    init(testing.io, testing.allocator);
+    try init(testing.allocator);
     defer deinit();
 
     var im1 = try Image.createEmpty(32, 32, 4, .{});
     defer im1.deinit();
 
-    var im2 = im1.resize(8, 6);
+    var im2 = try im1.resize(8, 6);
     defer im2.deinit();
 
     try testing.expect(im2.width == 8);
@@ -589,12 +598,11 @@ test "zstbi resize" {
 }
 
 test "zstbi write and load file" {
-    init(testing.io, testing.allocator);
+    try init(testing.allocator);
     defer deinit();
 
-    const pth = try std.process.executableDirPathAlloc(zstb_io, testing.allocator);
+    const pth = try std.process.executableDirPathAlloc(testing.io, testing.allocator);
     defer testing.allocator.free(pth);
-
     try std.process.setCurrentPath(testing.io, pth);
 
     var img = try Image.createEmpty(8, 6, 4, .{});
