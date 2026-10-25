@@ -9,26 +9,13 @@ pub fn build(b: *std.Build) void {
     });
 
     zstbi.addIncludePath(b.path("libs/stbi"));
-    if (optimize == .Debug) {
-        // TODO: Workaround for Zig bug.
-        zstbi.addCSourceFile(.{
-            .file = b.path("src/zstbi.c"),
-            .flags = &.{
-                "-std=c99",
-                "-fno-sanitize=undefined",
-                "-g",
-                "-O0",
-            },
-        });
-    } else {
-        zstbi.addCSourceFile(.{
-            .file = b.path("src/zstbi.c"),
-            .flags = &.{
-                "-std=c99",
-                "-fno-sanitize=undefined",
-            },
-        });
-    }
+    zstbi.addCSourceFile(.{
+        .file = b.path("src/zstbi.c"),
+        .flags = &.{
+            "-std=c99",
+            "-fno-sanitize=undefined",
+        },
+    });
     zstbi.link_libc = true;
 
     const test_step = b.step("test", "Run zstbi tests");

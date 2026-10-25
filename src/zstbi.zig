@@ -5,8 +5,7 @@ const Threaded = std.Io.Threaded;
 
 pub fn init(allocator: std.mem.Allocator) !void {
     if (mem_allocator != null) {
-        if (mem_allocations.?.count() != 0) return error.AllocatorStillInUse
-        else mem_allocations.?.deinit();
+        if (mem_allocations.?.count() != 0) return error.AllocatorStillInUse else mem_allocations.?.deinit();
     }
 
     mem_allocator = allocator;
@@ -397,7 +396,7 @@ extern var zstbiMallocPtr: ?*const fn (size: usize) callconv(.c) ?*anyopaque;
 extern var zstbiwMallocPtr: ?*const fn (size: usize) callconv(.c) ?*anyopaque;
 
 fn zstbiMalloc(size: usize) callconv(.c) ?*anyopaque {
-    Threaded.mutexLock(&mem_mutex);
+    Threaded.mutexLockUncancelable(&mem_mutex);
     defer Threaded.mutexUnlock(&mem_mutex);
 
     const mem = mem_allocator.?.alignedAlloc(
@@ -415,7 +414,7 @@ extern var zstbiReallocPtr: ?*const fn (ptr: ?*anyopaque, size: usize) callconv(
 extern var zstbiwReallocPtr: ?*const fn (ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque;
 
 fn zstbiRealloc(ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
-    Threaded.mutexLock(&mem_mutex);
+    Threaded.mutexLockUncancelable(&mem_mutex);
     defer Threaded.mutexUnlock(&mem_mutex);
 
     const old_size = if (ptr != null) mem_allocations.?.get(@intFromPtr(ptr.?)).? else 0;
@@ -441,7 +440,7 @@ extern var zstbiwFreePtr: ?*const fn (maybe_ptr: ?*anyopaque) callconv(.c) void;
 
 fn zstbiFree(maybe_ptr: ?*anyopaque) callconv(.c) void {
     if (maybe_ptr) |ptr| {
-        Threaded.mutexLock(&mem_mutex);
+        Threaded.mutexLockUncancelable(&mem_mutex);
         defer Threaded.mutexUnlock(&mem_mutex);
 
         const size = mem_allocations.?.fetchRemove(@intFromPtr(ptr)).?.value;
