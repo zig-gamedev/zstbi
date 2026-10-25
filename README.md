@@ -59,14 +59,13 @@ pub fn createEmpty(width: u32, height: u32, num_components: u32, args: struct {
     bytes_per_row: u32 = 0,
 }) !Image
 
-pub fn info(pathname: [:0]const u8) struct {
-    is_supported: bool,
+pub fn info(pathname: [:0]const u8) !struct {
     width: u32,
     height: u32,
     num_components: u32,
 }
 
-pub fn resize(image: *const Image, new_width: u32, new_height: u32) Image
+pub fn resize(image: *const Image, new_width: u32, new_height: u32) !Image
 
 pub fn writeToFile(
     image: *const Image,
@@ -85,7 +84,7 @@ pub fn writeToFn(
 var image = try zstbi.Image.loadFromFile("data/image.png", forced_num_components);
 defer image.deinit();
 
-const new_resized_image = image.resize(1024, 1024);
+const new_resized_image = try image.resize(1024, 1024);
 ```
 Misc functions:
 ```zig
